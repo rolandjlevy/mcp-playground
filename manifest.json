@@ -1,0 +1,91 @@
+{
+  "name": "MCP Task Manager",
+  "version": "1.0.0",
+  "description": "A simple MCP server exposing task management tools",
+  "tools": [
+    {
+      "name": "create-task",
+      "description": "Create a new task with a title",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "title": { "type": "string", "description": "The task title" }
+        },
+        "required": ["title"]
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "task": {
+            "type": "object",
+            "properties": {
+              "id": { "type": "string" },
+              "title": { "type": "string" },
+              "done": { "type": "boolean" }
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "list-tasks",
+      "description": "List all tasks",
+      "inputSchema": { "type": "null" },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "tasks": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": { "type": "string" },
+                "title": { "type": "string" },
+                "done": { "type": "boolean" }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "mark-complete",
+      "description": "Mark a task as complete by ID",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string", "description": "The task ID" }
+        },
+        "required": ["id"]
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "success": { "type": "boolean" },
+          "updatedTask": {
+            "type": "object",
+            "properties": {
+              "id": { "type": "string" },
+              "title": { "type": "string" },
+              "done": { "type": "boolean" }
+            }
+          }
+        }
+      }
+    }
+  ],
+  "resources": [
+    {
+      "name": "user-profile",
+      "description": "Basic information about the current user",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "name": { "type": "string" },
+          "role": { "type": "string" }
+        }
+      }
+    }
+  ]
+}
