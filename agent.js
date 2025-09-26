@@ -1,8 +1,7 @@
 // agent.js — a minimal MCP client + AI agent loop
 import fetch from 'node-fetch'; // install with: npm install node-fetch
 import OpenAI from 'openai'; // install with: npm install openai
-import dotenv from 'dotenv';
-dotenv.config();
+import process from 'process'; // built-in module in Node.js
 
 // 1. Load the manifest from your MCP server
 async function loadManifest() {
@@ -19,7 +18,11 @@ async function callTool(toolName, input) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(input),
   });
-  if (!res.ok) throw new Error(`Tool call failed: ${toolName}`);
+  if (!res.ok) {
+    const errorText = await res.text();
+    console.error(`Tool call failed: ${toolName}\nResponse: ${errorText}`);
+    throw new Error(`Tool call failed: ${toolName}`);
+  }
   return res.json();
 }
 

@@ -13,7 +13,14 @@ const manifest = JSON.parse(fs.readFileSync('./manifest.json', 'utf-8'));
 const TASKS_FILE = './tasks.json';
 
 // Utility to read tasks
-const readTasks = () => JSON.parse(fs.readFileSync(TASKS_FILE));
+const readTasks = () => {
+  if (!fs.existsSync(TASKS_FILE)) {
+    // If file doesn't exist, initialize with empty array
+    fs.writeFileSync(TASKS_FILE, JSON.stringify([], null, 2));
+    return [];
+  }
+  return JSON.parse(fs.readFileSync(TASKS_FILE));
+};
 
 // Utility to write tasks
 const writeTasks = (tasks) =>
