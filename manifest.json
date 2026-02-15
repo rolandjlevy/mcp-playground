@@ -72,6 +72,39 @@
           }
         }
       }
+    },
+    {
+      "name": "update-task",
+      "description": "Update a single task by ID",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string", "description": "The task ID" },
+          "title": {
+            "type": "string",
+            "description": "New title for the task"
+          },
+          "done": {
+            "type": "boolean",
+            "description": "Whether the task is completed"
+          }
+        },
+        "required": ["id"]
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "success": { "type": "boolean" },
+          "updatedTask": {
+            "type": "object",
+            "properties": {
+              "id": { "type": "string" },
+              "title": { "type": "string" },
+              "done": { "type": "boolean" }
+            }
+          }
+        }
+      }
     }
   ],
   "resources": [
