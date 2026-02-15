@@ -65,7 +65,9 @@ node chat.js
 
 ## Deployment to Vercel
 
-### Deploy the Express Server
+📘 **For detailed deployment instructions and framework settings, see [VERCEL_DEPLOYMENT.md](VERCEL_DEPLOYMENT.md)**
+
+### Quick Deploy
 
 1. **Install Vercel CLI** (if not already installed):
 
@@ -73,44 +75,38 @@ node chat.js
    npm i -g vercel
    ```
 
-2. **Deploy to Vercel**:
+2. **Deploy**:
 
    ```bash
    vercel
    ```
 
-   Follow the prompts to link your project or create a new one.
+3. **Set Environment Variables** in [Vercel dashboard](https://vercel.com/roland-levys-projects/mcp-playground/settings/environment-variables):
+   - `OPENAI_API_KEY`: Your OpenAI API key
 
-3. **Set Environment Variables in Vercel**:
-   - Go to your Vercel dashboard: https://vercel.com/your-username/mcp-playground/settings/environment-variables
-   - Add `OPENAI_API_KEY` with your OpenAI API key
-   - Select all environments (Production, Preview, Development)
-
-4. **Redeploy** if needed:
-   ```bash
-   vercel --prod
-   ```
+4. **Configure Framework Settings** (see [VERCEL_DEPLOYMENT.md](VERCEL_DEPLOYMENT.md) for details):
+   - Framework Preset: `Other`
+   - Build Command: _(empty)_
+   - Output Directory: `.`
+   - Install Command: `npm install`
+   - Development Command: `npm run dev`
 
 ### Run Chat Client Against Production
 
-Once deployed, update your local `.env` file:
+Update your local `.env`:
 
 ```bash
 OPENAI_API_KEY=your_api_key_here
-MCP_SERVER_URL=https://mcp-playground-eight.vercel.app
+MCP_SERVER_URL=https://your-app.vercel.app
 ```
 
-Then run the chat client locally:
+Run the chat client:
 
 ```bash
 node chat.js
 ```
 
-The chat client will now connect to your deployed Vercel server instead of localhost.
+### ⚠️ Important for Vercel
 
-### Important Notes for Vercel
-
-- Vercel runs Express apps as serverless functions
-- The `tasks.json` file won't persist between deployments (use a database for production)
-- Each request spawns a new serverless instance
-- Consider using Vercel KV, Postgres, or another database for persistent storage
+- `tasks.json` won't persist (use a database for production)
+- See [VERCEL_DEPLOYMENT.md](VERCEL_DEPLOYMENT.md) for full configuration and troubleshooting
