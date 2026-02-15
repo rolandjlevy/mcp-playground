@@ -6,6 +6,7 @@ import { fileURLToPath } from 'url';
 
 // Fix static path for Vercel serverless environment
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+// eslint-disable-next-line no-unused-vars
 const publicPath = path.join(__dirname, '..', 'public');
 
 export default app;
