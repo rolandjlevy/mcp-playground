@@ -36,10 +36,15 @@ import express from 'express';
 import fs from 'fs';
 import dotenv from 'dotenv';
 import OpenAI from 'openai';
+import fetch from 'node-fetch';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
 dotenv.config();
+
+if (!globalThis.fetch) {
+  globalThis.fetch = fetch;
+}
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -48,12 +53,23 @@ app.use(express.static(path.join(__dirname, 'public')));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-
 // Load manifest once at startup
 const manifest = JSON.parse(fs.readFileSync('./manifest.json', 'utf-8'));
 
 const TASKS_FILE = './tasks.json';
+const openAiKey = process.env.OPENAI_API_KEY;
+const client = openAiKey ? new OpenAI({ apiKey: openAiKey }) : null;
+const TIMEOUT_MS = 5000;
+
+const withTimeout = (promise, label) =>
+  Promise.race([
+    promise,
+    new Promise((_, reject) => {
+      setTimeout(() => {
+        reject(new Error(`${label} timed out after ${TIMEOUT_MS}ms`));
+      }, TIMEOUT_MS);
+    }),
+  ]);
 
 // Utility to read tasks
 const readTasks = () => {
@@ -143,7 +159,6 @@ const markCompleteByIdOrTitle = (idOrTitle) => {
 // Update a task's title by ID
 
 const updateTask = ({ id, title, done }) => {
-  console.log(id, title, done);
   const idNum = Number(id);
   if (Number.isNaN(idNum) || (!title && done === undefined)) {
     return {
@@ -246,7 +261,6 @@ app.post('/tools/create-task', (req, res) => {
 
 // MCP Tool: List Tasks
 app.get('/tools/list-tasks', (req, res) => {
-  console.log('### Received request to list tasks');
   res.json(listTasks());
 });
 
@@ -262,7 +276,6 @@ app.post('/tools/mark-complete', (req, res) => {
 
 // MCP Tool: update a single task by id with new title
 app.post('/tools/update-task', (req, res) => {
-  console.log('Received update-task call with body:', req.body);
   const { id, title, done } = req.body;
   const result = updateTask({ id, title, done });
   if (!result.success) {
@@ -272,17 +285,24 @@ app.post('/tools/update-task', (req, res) => {
 });
 
 // Chat API for the browser UI
-app.post('/api/chat', async (req, res) => {
+app.post('/chat', async (req, res) => {
   try {
-    if (!process.env.OPENAI_API_KEY) {
-      return res.status(500).json({ error: 'Missing OPENAI_API_KEY' });
+    if (!client) {
+      return res.status(503).json({
+        error: 'Missing OPENAI_API_KEY. Add it to .env and restart the server.',
+      });
     }
 
     const { message, messages } = req.body || {};
     const convo = Array.isArray(messages) ? [...messages] : [];
 
     if (message) {
-      convo.push({ role: 'user', content: message });
+      const lastEntry = convo[convo.length - 1];
+      const alreadyAdded =
+        lastEntry?.role === 'user' && lastEntry?.content === message;
+      if (!alreadyAdded) {
+        convo.push({ role: 'user', content: message });
+      }
     }
 
     if (!convo.some((entry) => entry.role === 'system')) {
@@ -294,10 +314,16 @@ app.post('/api/chat', async (req, res) => {
 
     const tools = toOpenAITools(manifest);
 
-    const response = await client.chat.completions.create({
-      model: 'gpt-4o-mini',
-      messages: convo,
-      tools,
+    const response = await withTimeout(
+      client.chat.completions.create({
+        model: 'gpt-4o-mini',
+        messages: convo,
+        tools,
+      }),
+      'OpenAI chat completion',
+    ).catch((error) => {
+      console.error('Error during chat completion:', error);
+      throw error;
     });
 
     const assistantMessage = response.choices[0].message;
@@ -318,20 +344,31 @@ app.post('/api/chat', async (req, res) => {
         });
       }
 
-      const followUp = await client.chat.completions.create({
-        model: 'gpt-4o-mini',
-        messages: convo,
+      const followUp = await withTimeout(
+        client.chat.completions.create({
+          model: 'gpt-4o-mini',
+          messages: convo,
+        }),
+        'OpenAI follow-up completion',
+      ).catch((error) => {
+        console.error('Error during follow-up completion:', error);
+        throw error;
       });
 
       const finalMessage = followUp.choices[0].message;
       convo.push(finalMessage);
+
       return res.json({ message: finalMessage, messages: convo });
     }
 
     return res.json({ message: assistantMessage, messages: convo });
   } catch (error) {
-    console.error('Error in /api/chat:', error);
-    return res.status(500).json({ error: error.message });
+    console.error('Error in /chat:', error);
+    const status = Number(error?.status || error?.statusCode) || 500;
+    const safeStatus = status >= 400 && status <= 599 ? status : 500;
+    return res
+      .status(safeStatus)
+      .json({ error: error?.message || 'Chat request failed' });
   }
 });
 

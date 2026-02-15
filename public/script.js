@@ -29,8 +29,11 @@ const renderTasks = (tasks) => {
 
 const renderMessages = (messages) => {
   const visible = messages.filter(
-    (entry) => entry.role === 'user' || entry.role === 'assistant',
+    (entry) =>
+      !entry.tool_calls &&
+      (entry.role === 'user' || entry.role === 'assistant'),
   );
+  console.log('### Rendering messages:', { messages, visible });
   $('#messages').innerHTML = visible
     .map((entry) => `<div class="bubble ${entry.role}">${entry.content}</div>`)
     .join('');
@@ -54,21 +57,39 @@ const fetchTasks = async () => {
 };
 
 const sendChat = async (message) => {
-  const res = await fetch('/api/chat', {
+  const res = await fetch('/chat', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ message, messages: conversation }),
   });
 
   if (!res.ok) {
-    const data = await res.json().catch(() => ({}));
-    throw new Error(data.error || 'Chat request failed');
+    const contentType = res.headers.get('content-type') || '';
+    let errorMessage = `Chat request failed (${res.status})`;
+    if (contentType.includes('application/json')) {
+      const data = await res.json().catch(() => ({}));
+      if (data?.error) {
+        errorMessage = `${errorMessage}: ${data.error}`;
+      }
+    } else {
+      const text = await res.text().catch(() => '');
+      if (text) {
+        errorMessage = `${errorMessage}: ${text}`;
+      }
+    }
+    throw new Error(errorMessage);
   }
 
   const data = await res.json();
   conversation = data.messages || conversation;
   renderMessages(conversation);
 };
+
+$('#chat-input').addEventListener('keyup', (e) => {
+  if (e.key === 'Enter' && !e.shiftKey && e.ctrlKey) {
+    $('#chat-form').dispatchEvent(new Event('submit'));
+  }
+});
 
 $('#chat-form').addEventListener('submit', async (event) => {
   event.preventDefault();
@@ -82,10 +103,11 @@ $('#chat-form').addEventListener('submit', async (event) => {
   try {
     await sendChat(message);
     await fetchTasks();
-    renderMessages(conversation);
   } catch (error) {
     console.error(error);
-    conversation.push({ role: 'assistant', content: error.message });
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    conversation.push({ role: 'assistant', content: errorMessage });
+    renderMessages(conversation);
   } finally {
     $('#chat-send').disabled = false;
     $('#chat-input').focus();
@@ -93,9 +115,8 @@ $('#chat-form').addEventListener('submit', async (event) => {
 });
 
 document.addEventListener('DOMContentLoaded', async () => {
-  fetchTasks();
+  await fetchTasks();
   renderMessages(conversation);
-  // setInterval(fetchTasks, 3000);
 });
 
 // Expose for tests

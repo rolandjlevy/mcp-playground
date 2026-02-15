@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "start": "node index.js",
-    "dev": "nodemon index.js",
+    "dev": "nodemon --ignore tasks.json index.js",
     "test": "scripts/test.sh",
     "jest": "jest",
     "lint": "eslint ."

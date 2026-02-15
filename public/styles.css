@@ -198,6 +198,10 @@ button:disabled {
   color: var(--muted);
 }
 
+.mt-10 {
+  margin-top: 10px;
+}
+
 .links {
   margin-top: 18px;
   display: flex;
