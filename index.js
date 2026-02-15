@@ -23,8 +23,29 @@ const readTasks = () => {
 };
 
 // Utility to write tasks
-const writeTasks = (tasks) =>
+const writeTasks = (tasks) => {
   fs.writeFileSync(TASKS_FILE, JSON.stringify(tasks, null, 2));
+};
+
+app.get('/tools/create-task', (req, res) => {
+  res.send(`
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>Create Task</title>
+        </head>
+        <body>
+          <h1>Create Task</h1>
+          <form method="POST" action="/tools/create-task">
+            <label for="title">Task Title:</label>
+            <input type="text" id="title" name="title" required />
+            <button type="submit">Create</button>
+          </form>
+          <a href="/">Home</a>
+        </body>
+      </html>
+    `);
+});
 
 // MCP Tool: Create Task
 app.post('/tools/create-task', (req, res) => {
@@ -77,7 +98,13 @@ app.get('/mcp/manifest', (req, res) => {
 app.get('/', (req, res) => {
   res.send(
     `MCP Server is running. 
-    Use <a href="/tools/summarize">/tools/summarize</a> or <a href="/resources/user-profile">/resources/user-profile</a> endpoints.`,
+    endpoints: 
+    <ul>
+    <li><a href="/tools/create-task">/tools/create-task</a></li>
+    <li><a href="/tools/list-tasks">/tools/list-tasks</a></li>
+    <li><a href="/tools/mark-complete">/tools/mark-complete</a></li>
+    <li><a href="/resources/user-profile">/resources/user-profile</a></li>
+    </ul>`,
   );
 });
 
