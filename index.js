@@ -56,7 +56,11 @@ app.use(express.urlencoded({ extended: true }));
 // Load manifest once at startup
 const manifest = JSON.parse(fs.readFileSync('./manifest.json', 'utf-8'));
 
-const TASKS_FILE = './tasks.json';
+// Use /tmp directory in Vercel serverless environment (writable)
+// Note: /tmp data is ephemeral and won't persist between cold starts
+const TASKS_FILE =
+  process.env.NODE_ENV === 'production' ? '/tmp/tasks.json' : './tasks.json';
+
 const openAiKey = process.env.OPENAI_API_KEY;
 const client = openAiKey ? new OpenAI({ apiKey: openAiKey }) : null;
 const TIMEOUT_MS = 5000;
@@ -73,17 +77,29 @@ const withTimeout = (promise, label) =>
 
 // Utility to read tasks
 const readTasks = () => {
-  if (!fs.existsSync(TASKS_FILE)) {
-    // If file doesn't exist, initialize with empty array
-    fs.writeFileSync(TASKS_FILE, JSON.stringify([], null, 2));
+  try {
+    if (!fs.existsSync(TASKS_FILE)) {
+      // If file doesn't exist, initialize with empty array
+      fs.writeFileSync(TASKS_FILE, JSON.stringify([], null, 2));
+      return [];
+    }
+    return JSON.parse(fs.readFileSync(TASKS_FILE, 'utf-8'));
+  } catch (error) {
+    console.error('Error reading tasks:', error);
     return [];
   }
-  return JSON.parse(fs.readFileSync(TASKS_FILE));
 };
 
 // Utility to write tasks
 const writeTasks = (tasks) => {
-  fs.writeFileSync(TASKS_FILE, JSON.stringify(tasks, null, 2));
+  try {
+    fs.writeFileSync(TASKS_FILE, JSON.stringify(tasks, null, 2));
+  } catch (error) {
+    console.error('Error writing tasks:', error);
+    throw new Error(
+      'Failed to save tasks. Tasks are ephemeral in serverless environment.',
+    );
+  }
 };
 
 // Task operations used by tool routes and the chat API
@@ -254,9 +270,18 @@ app.get('/tools/create-task', (req, res) => {
 
 // MCP Tool: Create Task (handle form submission)
 app.post('/tools/create-task', (req, res) => {
-  const { title } = req.body;
-  const result = createTask(title);
-  res.json(result);
+  try {
+    const { title } = req.body;
+    const result = createTask(title);
+    res.json(result);
+  } catch (error) {
+    console.error('Error creating task:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message,
+      note: 'Tasks in Vercel are stored in /tmp and reset on each cold start. Consider using a database for persistence.',
+    });
+  }
 });
 
 // MCP Tool: List Tasks
