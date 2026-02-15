@@ -1,11 +1,54 @@
+/**
+ * Express.js MCP (Model Context Protocol) Task Manager Server
+ *
+ * A RESTful API server that provides task management functionality with MCP-compliant tools and resources. Tasks are persisted to a JSON file (tasks.json).
+ *
+ * @description
+ * - Loads a manifest configuration from manifest.json at startup
+ * - Provides MCP tools for creating, listing, and marking tasks as complete
+ * - Provides MCP resources like user profile information
+ * - Serves an HTML form for interactive task creation
+ * - Stores all tasks in a local tasks.json file
+ *
+ * @requires express - Web framework for Node.js
+ * @requires fs - File system module for reading/writing JSON files
+ * @requires dotenv - Environment variable loader
+ *
+ * Server runs on http://localhost:3000
+ *
+ * @example
+ * // Start the server
+ * node index.js
+ *
+ * // Fetch the MCP manifest configuration
+ * curl http://localhost:3000/mcp/manifest | jq .
+ *
+ * // Create a new task
+ * curl -X POST http://localhost:3000/tools/create-task \
+ *   -H "Content-Type: application/json" \
+ *   -d '{"title":"Buy groceries"}'
+ *
+ * // List all tasks
+ * curl http://localhost:3000/tools/list-tasks | jq .
+ */
+
 import express from 'express';
 import fs from 'fs';
 import dotenv from 'dotenv';
+import OpenAI from 'openai';
+import path from 'path';
+import { fileURLToPath } from 'url';
 
 dotenv.config();
 
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
 const app = express();
+app.use(express.static(path.join(__dirname, 'public')));
 app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+
+const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
 // Load manifest once at startup
 const manifest = JSON.parse(fs.readFileSync('./manifest.json', 'utf-8'));
@@ -27,6 +70,153 @@ const writeTasks = (tasks) => {
   fs.writeFileSync(TASKS_FILE, JSON.stringify(tasks, null, 2));
 };
 
+// Task operations used by tool routes and the chat API
+const createTask = (title) => {
+  const tasks = readTasks();
+  const newTask = { id: Date.now(), title, done: false };
+  tasks.push(newTask);
+  writeTasks(tasks);
+  return { success: true, task: newTask };
+};
+
+// List all tasks
+const listTasks = () => {
+  const tasks = readTasks();
+  return { tasks };
+};
+
+// Mark a task as complete by ID
+export const markCompleteById = (id) => {
+  const idNum = Number(id);
+  if (Number.isNaN(idNum)) {
+    return { success: false, error: 'Invalid task ID' };
+  }
+  const tasks = readTasks().map((task) =>
+    task.id === idNum ? { ...task, done: true } : task,
+  );
+  writeTasks(tasks);
+  return { success: true };
+};
+
+// Mark a task as complete by ID or rough title match
+const markCompleteByIdOrTitle = (idOrTitle) => {
+  // If it's a number (or numeric string), treat as ID
+  const idNum = Number(idOrTitle);
+  if (
+    !Number.isNaN(idNum) &&
+    idOrTitle !== '' &&
+    idOrTitle !== null &&
+    idOrTitle !== undefined
+  ) {
+    const tasks = readTasks().map((task) =>
+      task.id === idNum ? { ...task, done: true } : task,
+    );
+    writeTasks(tasks);
+    return { success: true };
+  }
+
+  // Otherwise, attempt rough title match (case-insensitive substring)
+  const titleQuery =
+    typeof idOrTitle === 'string' ? idOrTitle.trim().toLowerCase() : '';
+  if (!titleQuery) {
+    return { success: false, error: 'Invalid task ID or missing title' };
+  }
+
+  let matched = false;
+  const tasks = readTasks().map((task) => {
+    const taskTitle = String(task.title || '').toLowerCase();
+    if (!matched && taskTitle.includes(titleQuery)) {
+      matched = true;
+      return { ...task, done: true };
+    }
+    return task;
+  });
+
+  if (!matched) {
+    return { success: false, error: 'No task title matched' };
+  }
+
+  writeTasks(tasks);
+  return { success: true };
+};
+
+// Update a task's title by ID
+
+const updateTask = ({ id, title, done }) => {
+  console.log(id, title, done);
+  const idNum = Number(id);
+  if (Number.isNaN(idNum) || (!title && done === undefined)) {
+    return {
+      success: false,
+      error: 'Invalid task ID or missing title/done status',
+    };
+  }
+  const updates = {};
+  if (title !== undefined) updates.title = title;
+  if (done !== undefined) updates.done = done;
+
+  const tasks = readTasks().map((task) =>
+    task.id === idNum ? { ...task, ...updates } : task,
+  );
+  writeTasks(tasks);
+  return { success: true };
+};
+
+// Convert manifest tools to OpenAI function format
+function toOpenAITools(manifestConfig) {
+  return (manifestConfig.tools || []).map((tool) => {
+    const params =
+      tool.inputSchema && tool.inputSchema !== null
+        ? tool.inputSchema
+        : { type: 'object', properties: {} };
+
+    if (params.type !== 'object') {
+      return {
+        type: 'function',
+        function: {
+          name: tool.name,
+          description: tool.description || '',
+          parameters: { type: 'object', properties: {} },
+        },
+      };
+    }
+
+    return {
+      type: 'function',
+      function: {
+        name: tool.name,
+        description: tool.description || '',
+        parameters: params,
+      },
+    };
+  });
+}
+
+// Execute a tool call from the assistant message
+const executeTool = (toolName, input) => {
+  console.log(`🔧 Executing tool: ${toolName} with input:`, input);
+  switch (toolName) {
+    case 'create-task':
+      return createTask(input?.title);
+    case 'list-tasks':
+      return listTasks();
+    case 'mark-complete': {
+      const idOrTitle =
+        input?.id ?? input?.title ?? input?.name ?? input?.task ?? input?.query;
+      return markCompleteByIdOrTitle(idOrTitle);
+    }
+    case 'update-task':
+      return updateTask({
+        id: input?.id,
+        title: input?.title,
+        done: input?.done,
+      });
+    default:
+      return { success: false, error: `Unknown tool: ${toolName}` };
+  }
+};
+
+// MCP Tool: Create Task (display HTML form)
 app.get('/tools/create-task', (req, res) => {
   res.send(`
       <!DOCTYPE html>
@@ -47,37 +237,102 @@ app.get('/tools/create-task', (req, res) => {
     `);
 });
 
-// MCP Tool: Create Task
+// MCP Tool: Create Task (handle form submission)
 app.post('/tools/create-task', (req, res) => {
   const { title } = req.body;
-  const tasks = readTasks();
-  const newTask = { id: Date.now(), title, done: false };
-  tasks.push(newTask);
-  writeTasks(tasks);
-  res.json({ success: true, task: newTask });
+  const result = createTask(title);
+  res.json(result);
 });
 
 // MCP Tool: List Tasks
 app.get('/tools/list-tasks', (req, res) => {
-  const tasks = readTasks();
-  res.json({ tasks });
+  console.log('### Received request to list tasks');
+  res.json(listTasks());
 });
 
 // MCP Tool: Mark Complete
 app.post('/tools/mark-complete', (req, res) => {
-  const { id } = req.body;
-  const idNum = Number(id); // normalize id to number
-  if (isNaN(idNum)) {
-    return res.status(400).json({
-      success: false,
-      error: 'Invalid task ID',
-    });
+  const { id, title } = req.body;
+  const result = markCompleteByIdOrTitle(id ?? title);
+  if (!result.success) {
+    return res.status(400).json(result);
   }
-  const tasks = readTasks().map((task) =>
-    task.id === idNum ? { ...task, done: true } : task,
-  );
-  writeTasks(tasks);
-  res.status(200).json({ success: true });
+  res.status(200).json(result);
+});
+
+// MCP Tool: update a single task by id with new title
+app.post('/tools/update-task', (req, res) => {
+  console.log('Received update-task call with body:', req.body);
+  const { id, title, done } = req.body;
+  const result = updateTask({ id, title, done });
+  if (!result.success) {
+    return res.status(400).json(result);
+  }
+  res.status(200).json(result);
+});
+
+// Chat API for the browser UI
+app.post('/api/chat', async (req, res) => {
+  try {
+    if (!process.env.OPENAI_API_KEY) {
+      return res.status(500).json({ error: 'Missing OPENAI_API_KEY' });
+    }
+
+    const { message, messages } = req.body || {};
+    const convo = Array.isArray(messages) ? [...messages] : [];
+
+    if (message) {
+      convo.push({ role: 'user', content: message });
+    }
+
+    if (!convo.some((entry) => entry.role === 'system')) {
+      convo.unshift({
+        role: 'system',
+        content: 'You are an AI agent that can call MCP tools.',
+      });
+    }
+
+    const tools = toOpenAITools(manifest);
+
+    const response = await client.chat.completions.create({
+      model: 'gpt-4o-mini',
+      messages: convo,
+      tools,
+    });
+
+    const assistantMessage = response.choices[0].message;
+    convo.push(assistantMessage);
+
+    if (assistantMessage.tool_calls && assistantMessage.tool_calls.length > 0) {
+      for (const toolCall of assistantMessage.tool_calls) {
+        const toolName = toolCall.function.name;
+        const toolArgs = toolCall.function.arguments
+          ? JSON.parse(toolCall.function.arguments)
+          : {};
+        const toolResult = executeTool(toolName, toolArgs);
+
+        convo.push({
+          role: 'tool',
+          tool_call_id: toolCall.id,
+          content: JSON.stringify(toolResult),
+        });
+      }
+
+      const followUp = await client.chat.completions.create({
+        model: 'gpt-4o-mini',
+        messages: convo,
+      });
+
+      const finalMessage = followUp.choices[0].message;
+      convo.push(finalMessage);
+      return res.json({ message: finalMessage, messages: convo });
+    }
+
+    return res.json({ message: assistantMessage, messages: convo });
+  } catch (error) {
+    console.error('Error in /api/chat:', error);
+    return res.status(500).json({ error: error.message });
+  }
 });
 
 // MCP Resource: User Profile
@@ -95,17 +350,9 @@ app.get('/mcp/manifest', (req, res) => {
 });
 
 // home
+
 app.get('/', (req, res) => {
-  res.send(
-    `MCP Server is running. 
-    endpoints: 
-    <ul>
-    <li><a href="/tools/create-task">/tools/create-task</a></li>
-    <li><a href="/tools/list-tasks">/tools/list-tasks</a></li>
-    <li><a href="/tools/mark-complete">/tools/mark-complete</a></li>
-    <li><a href="/resources/user-profile">/resources/user-profile</a></li>
-    </ul>`,
-  );
+  res.sendFile('./index.html', { root: __dirname });
 });
 
 app.listen(3000, () => {
