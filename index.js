@@ -53,8 +53,9 @@ app.use(express.static(path.join(__dirname, 'public')));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Load manifest once at startup
-const manifest = JSON.parse(fs.readFileSync('./manifest.json', 'utf-8'));
+// Load manifest once at startup - use absolute path for Vercel
+const manifestPath = path.join(__dirname, 'manifest.json');
+const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf-8'));
 
 // Use /tmp directory in Vercel serverless environment (writable)
 // Note: /tmp data is ephemeral and won't persist between cold starts

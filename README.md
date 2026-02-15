@@ -78,7 +78,7 @@ node chat.js
 2. **Deploy**:
 
    ```bash
-   vercel
+   vercel --prod
    ```
 
 3. **Set Environment Variables** in [Vercel dashboard](https://vercel.com/roland-levys-projects/mcp-playground/settings/environment-variables):
