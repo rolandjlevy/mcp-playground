@@ -392,6 +392,12 @@ app.get('/', (req, res) => {
   res.sendFile('./index.html', { root: __dirname });
 });
 
-app.listen(3000, () => {
-  console.log('✅ MCP Task Manager running on http://localhost:3000');
-});
+// Export the Express app for Vercel serverless
+export default app;
+
+// Only start the server if running locally (not in Vercel)
+if (process.env.NODE_ENV !== 'production') {
+  app.listen(3000, () => {
+    console.log('✅ MCP Task Manager running on http://localhost:3000');
+  });
+}

@@ -21,9 +21,14 @@ if (!process.env.OPENAI_API_KEY) {
 // Initialize OpenAI client
 const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
+// Server URL - defaults to localhost, but can be overridden with MCP_SERVER_URL env var
+const SERVER_URL = process.env.MCP_SERVER_URL || 'http://localhost:3000';
+
+console.log(`🔗 Connecting to MCP server at: ${SERVER_URL}\n`);
+
 // Load the manifest from the MCP server
 async function loadManifest() {
-  const res = await fetch('http://localhost:3000/mcp/manifest');
+  const res = await fetch(`${SERVER_URL}/mcp/manifest`);
   if (!res.ok) {
     throw new Error(`Failed to fetch manifest: ${res.status}`);
   }
@@ -62,7 +67,7 @@ function toOpenAITools(manifest) {
 
 // Call a tool on the MCP server
 async function callTool(toolName, input, toolMeta) {
-  const url = `http://localhost:3000/tools/${toolName}`;
+  const url = `${SERVER_URL}/tools/${toolName}`;
   const inputSchema = toolMeta ? toolMeta.inputSchema : null;
   const isNullInput = inputSchema === null || inputSchema?.type === 'null';
   const method = isNullInput ? 'GET' : 'POST';
