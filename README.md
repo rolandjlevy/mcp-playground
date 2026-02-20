@@ -1,4 +1,4 @@
-# MCP Playground
+# MCP Task Studio
 
 This project combines a simple MCP-style server with a chat loop that can call the server's tools through an LLM. See the [demo here](https://mcp-playground-eight.vercel.app)
 
