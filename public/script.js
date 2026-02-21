@@ -117,6 +117,7 @@ $('#chat-form').addEventListener('submit', async (event) => {
 document.addEventListener('DOMContentLoaded', async () => {
   await fetchTasks();
   renderMessages(conversation);
+  $('.currentYear').textContent = new Date().getFullYear();
 });
 
 // Expose for tests
