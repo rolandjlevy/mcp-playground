@@ -47,6 +47,7 @@ header h1 {
   font-family: 'Fraunces', serif;
   font-size: clamp(2rem, 3vw, 2.8rem);
   letter-spacing: -0.02em;
+  color: var(--forest);
 }
 
 header p {
